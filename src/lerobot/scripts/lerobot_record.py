@@ -55,6 +55,39 @@ lerobot-record \
   --dataset.repo_id=${HF_USER}/bimanual-so100-handover-cube \
   --dataset.num_episodes=25 \
   --dataset.single_task="Grab and handover the red cube to the other arm"
+
+
+
+lerobot-record \
+  --robot.type=bi_so100_follower \
+  --robot.left_arm_port=/dev/ttyACM0 \
+  --robot.right_arm_port=/dev/ttyACM2 \
+  --robot.id=bimanual_follower \
+  --robot.cameras='{
+      left: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30, fourcc: "MJPG"}, 
+      right: {"type": "opencv", "index_or_path": 2, "width": 640, "height": 480, "fps": 30},
+      orbbec_rgb: {type: orbbec_astra, width: 640, height: 480, fps: 30, output_mode: "color"},
+      orbbec_depth: {type: orbbec_astra, width: 640, height: 480, fps: 30, output_mode: "depth_raw"}
+  }' \
+  --teleop.type=bi_so100_leader \
+  --teleop.left_arm_port=/dev/ttyACM1 \
+  --teleop.right_arm_port=/dev/ttyACM3 \
+  --teleop.id=bimanual_leader \
+  --display_data=true \
+  --dataset.repo_id=robodata/cup_with_depth_bimanual \
+  --dataset.num_episodes=50 \
+  --dataset.single_task="Put the cup in the basket" \
+  --dataset.push_to_hub=false \
+  --dataset.episode_time_s=30 \
+  --dataset.reset_time_s=10
+
+lerobot-record   --robot.type=bi_so100_follower   --robot.left_arm_port=/dev/ttyACM0   --robot.right_arm_port=/dev/ttyACM2   --robot.id=bimanual_follower   --robot.cameras='{
+      left: {type: opencv, index_or_path: 4, width: 640, height: 480, fps: 30, fourcc: "MJPG"}, 
+      right: {"type": "opencv", "index_or_path": 2, "width": 640, "height": 480, "fps": 30, fourcc: "MJPG"},
+      orbbec_rgb: {type: orbbec_astra, width: 640, height: 480, fps: 30, output_mode: "color"},
+  }'   --teleop.type=bi_so100_leader   --teleop.left_arm_port=/dev/ttyACM1   --teleop.right_arm_port=/dev/ttyACM3   --teleop.id=bimanual_leader   --display_data=true   --dataset.repo_id=robodata/stackbowls   --dataset.num_episodes=50   --dataset.single_task="Stack the bowls"   --dataset.push_to_hub=false   --dataset.episode_time_s=30   --dataset.reset_time_s=10
+
+
 ```
 """
 
@@ -70,6 +103,7 @@ from lerobot.cameras import (  # noqa: F401
 )
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401
 from lerobot.cameras.realsense.configuration_realsense import RealSenseCameraConfig  # noqa: F401
+from lerobot.cameras.orbbec_astra.configuration_orbbec_astra import OrbbecAstraCameraConfig  # noqa: F401
 from lerobot.configs import parser
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.datasets.image_writer import safe_stop_image_writer

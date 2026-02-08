@@ -1,0 +1,1 @@
+bash scripts/run_bimanual_vla_infer.sh --task "Stack the bowls"

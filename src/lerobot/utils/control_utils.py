@@ -115,13 +115,15 @@ def predict_action(
     return action
 
 
-def init_keyboard_listener():
+def init_keyboard_listener(manual_episode_control: bool = False, enable_takeover: bool = False):
     """
     Initializes a non-blocking keyboard listener for real-time user interaction.
 
-    This function sets up a listener for specific keys (right arrow, left arrow, escape) to control
-    the program flow during execution, such as stopping recording or exiting loops. It gracefully
-    handles headless environments where keyboard listening is not possible.
+    This function sets up a listener for keys that control recording flow. By default, the right
+    and left arrow keys finish or re-record an episode. In manual episode mode, Enter starts or
+    confirms an episode and R discards the episode being recorded. When takeover is enabled,
+    Space (or T) switches from policy/VLA control to human teleoperation. It gracefully handles
+    headless environments where keyboard listening is not possible.
 
     Returns:
         A tuple containing:
@@ -135,6 +137,12 @@ def init_keyboard_listener():
     events["exit_early"] = False
     events["rerecord_episode"] = False
     events["stop_recording"] = False
+    events["start_episode"] = False
+    events["confirm_episode"] = False
+    events["discard_episode"] = False
+    events["recording"] = False
+    events["takeover"] = False
+    events["align_leader"] = False
 
     if is_headless():
         logging.warning(
@@ -146,18 +154,42 @@ def init_keyboard_listener():
     # Only import pynput if not in a headless environment
     from pynput import keyboard
 
+    def _is_takeover_key(key) -> bool:
+        if key == keyboard.Key.space:
+            return True
+        return getattr(key, "char", None) in ("t", "T")
+
     def on_press(key):
         try:
-            if key == keyboard.Key.right:
-                print("Right arrow key pressed. Exiting loop...")
-                events["exit_early"] = True
-            elif key == keyboard.Key.left:
-                print("Left arrow key pressed. Exiting loop and rerecord the last episode...")
-                events["rerecord_episode"] = True
-                events["exit_early"] = True
-            elif key == keyboard.Key.esc:
+            if key == keyboard.Key.esc:
                 print("Escape key pressed. Stopping data recording...")
                 events["stop_recording"] = True
+                events["exit_early"] = True
+            elif enable_takeover and not events["recording"] and _is_takeover_key(key):
+                print("Takeover key pressed. Switching to human teleoperation...")
+                events["takeover"] = True
+            elif enable_takeover and not events["recording"] and getattr(key, "char", None) in ("a", "A"):
+                print("A key pressed. Aligning leader arms to follower...")
+                events["align_leader"] = True
+            elif manual_episode_control and key == keyboard.Key.enter:
+                if events["recording"]:
+                    print("Enter key pressed. Confirming the current episode...")
+                    events["confirm_episode"] = True
+                    events["exit_early"] = True
+                else:
+                    print("Enter key pressed. Starting a new episode...")
+                    events["start_episode"] = True
+            elif manual_episode_control and getattr(key, "char", None) in ("r", "R"):
+                if events["recording"]:
+                    print("R key pressed. Discarding the current episode...")
+                    events["discard_episode"] = True
+                    events["exit_early"] = True
+            elif not manual_episode_control and key == keyboard.Key.right:
+                print("Right arrow key pressed. Exiting loop...")
+                events["exit_early"] = True
+            elif not manual_episode_control and key == keyboard.Key.left:
+                print("Left arrow key pressed. Exiting loop and rerecord the last episode...")
+                events["rerecord_episode"] = True
                 events["exit_early"] = True
         except Exception as e:
             print(f"Error handling key press: {e}")

@@ -116,6 +116,54 @@ class BiSO100Leader(Teleoperator):
         if right_feedback:
             self.right_arm.send_feedback(right_feedback)
 
+    def align_to_follower(
+        self,
+        follower_observation: dict[str, float],
+        ramp_duration_s: float = 1.5,
+        steps: int = 30,
+        arm_torque_limit: int = 400,
+        gripper_torque_limit: int = 150,
+    ) -> None:
+        """Align both leader arms to the follower's current joint positions.
+
+        ``follower_observation`` is a dict keyed like ``left_shoulder_pan.pos``
+        and ``right_gripper.pos``, as returned by ``BiSO100Follower.get_observation``.
+        Joint positions are expected to be normalized the same way as the leader
+        (RANGE_M100_100 for arms, RANGE_0_100 for the gripper).
+        """
+        left_positions = {
+            key.removeprefix("left_").removesuffix(".pos"): value
+            for key, value in follower_observation.items()
+            if key.startswith("left_") and key.endswith(".pos")
+        }
+        right_positions = {
+            key.removeprefix("right_").removesuffix(".pos"): value
+            for key, value in follower_observation.items()
+            if key.startswith("right_") and key.endswith(".pos")
+        }
+
+        if left_positions:
+            self.left_arm.align_to_positions(
+                left_positions,
+                ramp_duration_s=ramp_duration_s,
+                steps=steps,
+                arm_torque_limit=arm_torque_limit,
+                gripper_torque_limit=gripper_torque_limit,
+            )
+        if right_positions:
+            self.right_arm.align_to_positions(
+                right_positions,
+                ramp_duration_s=ramp_duration_s,
+                steps=steps,
+                arm_torque_limit=arm_torque_limit,
+                gripper_torque_limit=gripper_torque_limit,
+            )
+
+    def release_torque(self) -> None:
+        """Disable torque on both leader arms so they become passive for teleoperation."""
+        self.left_arm.release_torque()
+        self.right_arm.release_torque()
+
     def disconnect(self) -> None:
         self.left_arm.disconnect()
         self.right_arm.disconnect()

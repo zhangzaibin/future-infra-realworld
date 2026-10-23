@@ -17,7 +17,7 @@
 from unittest.mock import patch
 
 from lerobot.scripts.lerobot_calibrate import CalibrateConfig, calibrate
-from lerobot.scripts.lerobot_record import DatasetRecordConfig, RecordConfig, record
+from lerobot.scripts.lerobot_record import DatasetRecordConfig, RecordConfig, record, record_loop
 from lerobot.scripts.lerobot_replay import DatasetReplayConfig, ReplayConfig, replay
 from lerobot.scripts.lerobot_teleoperate import TeleoperateConfig, teleoperate
 from tests.fixtures.constants import DUMMY_REPO_ID
@@ -81,6 +81,52 @@ def test_record_and_resume(tmp_path):
     assert dataset.meta.total_episodes == dataset.num_episodes == 2
     assert dataset.meta.total_frames == dataset.num_frames == 6
     assert dataset.meta.total_tasks == 1
+
+
+def test_manual_record_discards_then_saves_episode(tmp_path):
+    robot_cfg = MockRobotConfig(calibration_dir=tmp_path / "robot_calibration")
+    teleop_cfg = MockTeleopConfig(calibration_dir=tmp_path / "teleop_calibration")
+    dataset_cfg = DatasetRecordConfig(
+        repo_id=DUMMY_REPO_ID,
+        single_task="Dummy task",
+        root=tmp_path / "manual_record",
+        num_episodes=1,
+        manual_episode_control=True,
+        push_to_hub=False,
+    )
+    cfg = RecordConfig(
+        robot=robot_cfg,
+        dataset=dataset_cfg,
+        teleop=teleop_cfg,
+        play_sounds=False,
+    )
+    events = {
+        "exit_early": False,
+        "rerecord_episode": False,
+        "stop_recording": False,
+        "start_episode": False,
+        "confirm_episode": False,
+        "discard_episode": False,
+        "recording": False,
+    }
+    decisions = iter(("discard_episode", "confirm_episode"))
+
+    def run_short_episode(**kwargs):
+        kwargs["control_time_s"] = 0.1
+        record_loop(**kwargs)
+        events[next(decisions)] = True
+
+    with (
+        patch("lerobot.scripts.lerobot_record.is_headless", return_value=False),
+        patch("lerobot.scripts.lerobot_record.init_keyboard_listener", return_value=(None, events)),
+        patch("lerobot.scripts.lerobot_record.wait_for_episode_start", return_value=True),
+        patch("lerobot.scripts.lerobot_record.record_loop", side_effect=run_short_episode) as mock_loop,
+    ):
+        dataset = record(cfg)
+
+    assert mock_loop.call_count == 2
+    assert dataset.num_episodes == 1
+    assert dataset.num_frames == 3
 
 
 def test_record_and_replay(tmp_path):

@@ -345,6 +345,15 @@ Control the data recording flow using keyboard shortcuts:
 - Press **Left Arrow (`←`)**: Cancel the current episode and re-record it.
 - Press **Escape (`ESC`)**: Immediately stop the session, encode videos, and upload the dataset.
 
+To switch episodes entirely by hand, add `--dataset.manual_episode_control=true`. In this mode,
+`episode_time_s` and `reset_time_s` are ignored:
+
+- While waiting, press **Enter** to start recording an episode.
+- While recording, press **Enter** to confirm and save the current episode.
+- While recording, press **R** to discard the current episode. Press **Enter** when you are ready to
+  record its replacement.
+- Press **Escape (`ESC`)** to stop. An episode that has not been confirmed with Enter is discarded.
+
 #### Tips for gathering data
 
 Once you're comfortable with data recording, you can create a larger dataset for training. A good starting task is grasping an object at different locations and placing it in a bin. We suggest recording at least 50 episodes, with 10 episodes per location. Keep the cameras fixed and maintain consistent grasping behavior throughout the recordings. Also make sure the object you are manipulating is visible on the camera's. A good rule of thumb is you should be able to do the task yourself by only looking at the camera images.

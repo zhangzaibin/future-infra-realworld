@@ -178,6 +178,9 @@ class DatasetRecordConfig:
     reset_time_s: int | float = 60
     # Number of episodes to record.
     num_episodes: int = 50
+    # Wait for Enter to start each episode; Enter saves and R discards the episode being recorded.
+    # In this mode, episode_time_s and reset_time_s are ignored.
+    manual_episode_control: bool = False
     # Encode frames in the dataset into video
     video: bool = True
     # Upload dataset to Hugging Face hub.
@@ -287,7 +290,7 @@ def record_loop(
     policy: PreTrainedPolicy | None = None,
     preprocessor: PolicyProcessorPipeline[dict[str, Any], dict[str, Any]] | None = None,
     postprocessor: PolicyProcessorPipeline[PolicyAction, PolicyAction] | None = None,
-    control_time_s: int | None = None,
+    control_time_s: int | float | None = None,
     single_task: str | None = None,
     display_data: bool = False,
 ):
@@ -322,7 +325,7 @@ def record_loop(
 
     timestamp = 0
     start_episode_t = time.perf_counter()
-    while timestamp < control_time_s:
+    while control_time_s is None or timestamp < control_time_s:
         start_loop_t = time.perf_counter()
 
         if events["exit_early"]:
@@ -403,10 +406,27 @@ def record_loop(
         timestamp = time.perf_counter() - start_episode_t
 
 
+def wait_for_episode_start(events: dict) -> bool:
+    """Wait until Enter starts an episode, returning False when recording is stopped."""
+    events["recording"] = False
+    events["start_episode"] = False
+    events["exit_early"] = False
+    log_say("Press Enter to start the next episode, or Escape to stop", play_sounds=False)
+
+    while not events["start_episode"] and not events["stop_recording"]:
+        time.sleep(0.05)
+
+    events["start_episode"] = False
+    return not events["stop_recording"]
+
+
 @parser.wrap()
 def record(cfg: RecordConfig) -> LeRobotDataset:
     init_logging()
     logging.info(pformat(asdict(cfg)))
+    if cfg.dataset.manual_episode_control and is_headless():
+        raise RuntimeError("Manual episode control requires a working keyboard listener.")
+
     if cfg.display_data:
         init_rerun(session_name="recording")
 
@@ -477,11 +497,17 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
     if teleop is not None:
         teleop.connect()
 
-    listener, events = init_keyboard_listener()
+    listener, events = init_keyboard_listener(manual_episode_control=cfg.dataset.manual_episode_control)
 
     with VideoEncodingManager(dataset):
         recorded_episodes = 0
         while recorded_episodes < cfg.dataset.num_episodes and not events["stop_recording"]:
+            if cfg.dataset.manual_episode_control and not wait_for_episode_start(events):
+                break
+
+            events["recording"] = cfg.dataset.manual_episode_control
+            events["confirm_episode"] = False
+            events["discard_episode"] = False
             log_say(f"Recording episode {dataset.num_episodes}", cfg.play_sounds)
             record_loop(
                 robot=robot,
@@ -495,10 +521,34 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                 preprocessor=preprocessor,
                 postprocessor=postprocessor,
                 dataset=dataset,
-                control_time_s=cfg.dataset.episode_time_s,
+                control_time_s=None if cfg.dataset.manual_episode_control else cfg.dataset.episode_time_s,
                 single_task=cfg.dataset.single_task,
                 display_data=cfg.display_data,
             )
+            events["recording"] = False
+
+            if cfg.dataset.manual_episode_control:
+                if events["stop_recording"]:
+                    dataset.clear_episode_buffer()
+                    break
+
+                if events["discard_episode"]:
+                    log_say("Discard episode", cfg.play_sounds)
+                    dataset.clear_episode_buffer()
+                    events["discard_episode"] = False
+                    events["exit_early"] = False
+                    continue
+
+                if not events["confirm_episode"]:
+                    # The manual recording loop should only end through Enter, R, or Escape.
+                    dataset.clear_episode_buffer()
+                    raise RuntimeError("Manual recording ended without an episode decision.")
+
+                dataset.save_episode()
+                recorded_episodes += 1
+                events["confirm_episode"] = False
+                events["exit_early"] = False
+                continue
 
             # Execute a few seconds without recording to give time to manually reset the environment
             # Skip reset for the last episode to be recorded

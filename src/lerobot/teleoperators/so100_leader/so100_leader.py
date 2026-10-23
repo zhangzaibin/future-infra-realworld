@@ -151,6 +151,60 @@ class SO100Leader(Teleoperator):
         # TODO(rcadene, aliberts): Implement force feedback
         raise NotImplementedError
 
+    def align_to_positions(
+        self,
+        positions: dict[str, float],
+        ramp_duration_s: float = 1.5,
+        steps: int = 30,
+        arm_torque_limit: int = 400,
+        gripper_torque_limit: int = 150,
+        hold: bool = True,
+    ) -> None:
+        """Drive the leader joints to the given normalized positions.
+
+        Used to auto-align the leader arm with the follower arm during manual
+        takeover. When ``hold`` is True (default) torque stays enabled after the
+        motion so the arm keeps holding the aligned pose without dropping; call
+        :meth:`release_torque` later (e.g. when teleoperation starts) to make the
+        leader passive again. Positions must be keyed by motor name and expressed
+        in the same normalized range as ``get_action`` (RANGE_M100_100 / RANGE_0_100).
+        """
+        if not self.is_connected:
+            raise DeviceNotConnectedError(f"{self} is not connected.")
+
+        # Apply conservative torque/current limits before enabling torque so the
+        # leader moves gently and won't push hard against the human. The gripper
+        # (a trigger input) gets a much lower limit to avoid pinching fingers.
+        for motor in self.bus.motors:
+            if motor == "gripper":
+                self.bus.write("Max_Torque_Limit", motor, gripper_torque_limit)
+                self.bus.write("Protection_Current", motor, gripper_torque_limit // 2)
+            else:
+                self.bus.write("Max_Torque_Limit", motor, arm_torque_limit)
+                self.bus.write("Protection_Current", motor, arm_torque_limit // 2)
+
+        self.bus.enable_torque()
+        try:
+            current = self.bus.sync_read("Present_Position")
+            for i in range(1, steps + 1):
+                alpha = i / steps
+                interp = {
+                    motor: current[motor] + (positions[motor] - current[motor]) * alpha
+                    for motor in positions
+                }
+                self.bus.sync_write("Goal_Position", interp)
+                time.sleep(ramp_duration_s / steps)
+            # Final settle at the exact target
+            self.bus.sync_write("Goal_Position", positions)
+            time.sleep(0.2)
+        finally:
+            if not hold:
+                self.bus.disable_torque()
+
+    def release_torque(self) -> None:
+        """Disable torque so the leader arm becomes passive for teleoperation."""
+        self.bus.disable_torque()
+
     def disconnect(self) -> None:
         if not self.is_connected:
             DeviceNotConnectedError(f"{self} is not connected.")

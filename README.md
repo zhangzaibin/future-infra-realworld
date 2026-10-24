@@ -10,11 +10,6 @@
 
 ### Step 1 — Connect Hardware
 Plug in all power cables and USB connections for both leader and follower arms.
-
-### Step 2 — Start the Orbbec Camera
-Launch the Orbbec Astra camera bridge to stream RGB-D frames via shared memory:
-```bash
-~/AstraSDK/samples/lerobot_bridge/start_orbbec_capture.sh
 ```
 
 ### Step 3 — Grant USB Permissions （给USB端口权限）
@@ -25,6 +20,7 @@ sudo chmod 666 /dev/ttyACM*
 
 ### 查看USB设备
 ```bash
+# 这块usb拆入电脑顺序，会有ttyACM0 ttyACM1等等，从而自己就知道那个ttyACM是哪个arm。
 ls -l /dev/ttyACM*
 python -m serial.tools.list_ports -v
 ls -l /dev/serial/by-id/
@@ -32,6 +28,7 @@ ls -l /dev/serial/by-id/
 
 ### Step 4 — Discover Wrist Cameras （查看摄像头）
 List all connected OpenCV-compatible cameras (typically the two wrist cameras):
+这块就能看到不同的相机是哪个arm了
 ```bash
 lerobot-find-cameras opencv
 ```
@@ -41,49 +38,25 @@ enter启动/结束一轮episode录制，录制过程中按‘r'丢弃该条数�
 Update `index_or_path` for `left` and `right` cameras based on the indices found above,
 then adjust `repo_id`, `single_task`, and other parameters as needed:
 ```bash
-lerobot-record \
-  --robot.type=bi_so100_follower \
-  --robot.left_arm_port=/dev/ttyACM0 \
-  --robot.right_arm_port=/dev/ttyACM2 \
-  --robot.id=bimanual_follower \
-  --robot.cameras='{
-    right:      {type: opencv, index_or_path: 4, width: 640, height: 480, fps: 30, fourcc: "MJPG"},
-    left:       {type: opencv, index_or_path: 2, width: 640, height: 480, fps: 30, fourcc: "MJPG"},
-    orbbec_rgb: {type: orbbec_astra, width: 640, height: 480, fps: 30, output_mode: "color"}
-  }' \
-  --teleop.type=bi_so100_leader \
-  --teleop.left_arm_port=/dev/ttyACM1 \
-  --teleop.right_arm_port=/dev/ttyACM3 \
-  --teleop.id=bimanual_leader \
-  --display_data=true \
-  --dataset.repo_id=robodata/pass_judy \
-  --dataset.num_episodes=50 \
-  --dataset.single_task="Hand over the doll and place it into the basket." \
-  --dataset.push_to_hub=false \
-  --dataset.episode_time_s=30 \
-  --dataset.reset_time_s=10
-```
-
-```bash
 HF_HUB_OFFLINE=1 lerobot-record \
   --robot.type=bi_so100_follower \
   --robot.left_arm_port=/dev/ttyACM0 \
   --robot.right_arm_port=/dev/ttyACM2 \
   --robot.id=bimanual_follower \
   --robot.cameras='{
-    right:      {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30, fourcc: "YUYV"},
-    left:       {type: opencv, index_or_path: 2, width: 640, height: 480, fps: 30, fourcc: "YUYV"},
-    orbbec_rgb: {type: opencv, index_or_path: 8, width: 1920, height: 1080, fps: 30, fourcc: "YUYV"}
+    right:      {type: opencv, index_or_path: 6, width: 640, height: 480, fps: 30, fourcc: "YUYV"},
+    left:       {type: opencv, index_or_path: 8, width: 640, height: 480, fps: 30, fourcc: "YUYV"},
+    orbbec_rgb: {type: opencv, index_or_path: 4, width: 1920, height: 1080, fps: 30, fourcc: "YUYV"}
   }' \
   --teleop.type=bi_so100_leader \
   --teleop.left_arm_port=/dev/ttyACM1 \
   --teleop.right_arm_port=/dev/ttyACM3 \
   --teleop.id=bimanual_leader \
   --display_data=false \
-  --dataset.repo_id=robodata/fold_towel0918 \
-  --dataset.root=./datasets/fold_towel0918 \
+  --dataset.repo_id=robodata/teleoperation_data \
+  --dataset.root=./datasets/teleoperation_data \
   --dataset.num_episodes=200 \
-  --dataset.single_task="foldthetowel." \
+  --dataset.single_task="have fun." \
   --dataset.push_to_hub=false \
   --dataset.manual_episode_control=true \
   --resume=true
